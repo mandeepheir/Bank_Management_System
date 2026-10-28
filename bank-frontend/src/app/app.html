@@ -1,0 +1,406 @@
+
+<div class="app-container">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-icon">B</span>
+      <span>BankFlow</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#dashboard" class="nav-link active">
+        <span>▦</span> Dashboard
+      </a>
+      <a href="#accounts" class="nav-link">
+        <span>▣</span> Accounts
+      </a>
+      <a href="#money-transfers" class="nav-link">
+        <span>↔</span> Money Transfers
+      </a>
+      <a href="#transactions" class="nav-link">
+        <span>◷</span> Transactions
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <p>BankFlow Management</p>
+      <small>Bank Management System</small>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- Header -->
+    <header class="topbar">
+      <div>
+        <h1>Dashboard</h1>
+        <p>Manage your bank accounts and transactions.</p>
+      </div>
+
+      <button
+        type="button"
+        class="refresh-button"
+        (click)="loadAccounts()"
+        [disabled]="isLoading || isProcessing || isCreatingAccount"
+      >
+        {{ isLoading ? 'Refreshing...' : 'Refresh Data' }}
+      </button>
+    </header>
+
+    <!-- Status messages -->
+    <div class="status-banner" *ngIf="isLoading">
+      Loading your bank accounts...
+    </div>
+
+    <div class="status-banner error" *ngIf="errorMessage" role="alert">
+      {{ errorMessage }}
+    </div>
+
+    <div class="status-banner success" *ngIf="successMessage" role="status">
+      {{ successMessage }}
+    </div>
+
+    <!-- Dashboard summary -->
+    <section id="dashboard" class="dashboard-section">
+      <div class="section-heading">
+        <h2>Overview</h2>
+        <p>Your current banking summary.</p>
+      </div>
+
+      <div class="summary-grid">
+        <article class="summary-card">
+          <div class="summary-icon">▣</div>
+          <p>Total Accounts</p>
+          <h2>{{ accounts.length }}</h2>
+          <span>Available bank accounts</span>
+        </article>
+
+        <article class="summary-card">
+          <div class="summary-icon">＄</div>
+          <p>Total Balance</p>
+          <h2>{{ totalBalance | currency:'USD':'symbol':'1.2-2' }}</h2>
+          <span>Combined account balance</span>
+        </article>
+
+        <article class="summary-card">
+          <div class="summary-icon">↔</div>
+          <p>Transactions</p>
+          <h2>{{ totalTransactions }}</h2>
+          <span>For the selected account</span>
+        </article>
+      </div>
+    </section>
+
+    <!-- Account management -->
+    <section id="accounts" class="content-section">
+      <div class="section-heading">
+        <h2>Account Management</h2>
+        <p>Select an account or create a new one.</p>
+      </div>
+
+      <!-- Existing accounts -->
+      <div class="account-panel" *ngIf="accounts.length > 0">
+        <label for="account-select">Select bank account</label>
+
+        <select
+          id="account-select"
+          class="form-control"
+          [(ngModel)]="selectedAccountId"
+          (ngModelChange)="onAccountChange()"
+          name="selectedAccountId"
+          [disabled]="isProcessing || isCreatingAccount"
+        >
+          <option
+            *ngFor="let account of accounts"
+            [ngValue]="account.id"
+          >
+            {{ account.accountHolderName }} — {{ account.accountNumber }}
+          </option>
+        </select>
+
+        <div class="account-details" *ngIf="selectedAccount">
+          <div>
+            <span>Account holder</span>
+            <strong>{{ selectedAccount.accountHolderName }}</strong>
+          </div>
+
+          <div>
+            <span>Account number</span>
+            <strong>{{ selectedAccount.accountNumber }}</strong>
+          </div>
+
+          <div>
+            <span>Account ID</span>
+            <strong>{{ selectedAccount.id }}</strong>
+          </div>
+        </div>
+
+        <p class="selected-balance" *ngIf="selectedAccount">
+          Current balance:
+          <strong>
+            {{ selectedAccount.balance | currency:'USD':'symbol':'1.2-2' }}
+          </strong>
+        </p>
+      </div>
+
+      <div
+        class="empty-state"
+        *ngIf="!isLoading && accounts.length === 0 && !errorMessage"
+      >
+        <h3>No accounts found</h3>
+        <p>Create your first bank account using the form below.</p>
+      </div>
+
+      <!-- Create account form -->
+      <form
+        class="transfer-form create-account-form"
+        (ngSubmit)="createAccount()"
+        #createAccountForm="ngForm"
+      >
+        <div class="transfer-heading">
+          <div class="transfer-icon deposit-icon">+</div>
+          <div>
+            <h3>Create New Account</h3>
+            <p>Add a new customer bank account.</p>
+          </div>
+        </div>
+
+        <label for="new-account-holder">Account holder name</label>
+        <input
+          id="new-account-holder"
+          class="form-control"
+          type="text"
+          name="newAccountHolderName"
+          [(ngModel)]="newAccountHolderName"
+          placeholder="Enter full name"
+          required
+          maxlength="100"
+          [disabled]="isCreatingAccount"
+        />
+
+        <label for="new-account-number">Account number</label>
+        <input
+          id="new-account-number"
+          class="form-control"
+          type="text"
+          name="newAccountNumber"
+          [(ngModel)]="newAccountNumber"
+          placeholder="e.g. ACC1003"
+          required
+          maxlength="50"
+          [disabled]="isCreatingAccount"
+        />
+
+        <label for="new-account-balance">Starting balance</label>
+        <div class="amount-input">
+          <span>$</span>
+          <input
+            id="new-account-balance"
+            type="number"
+            name="newAccountBalance"
+            [(ngModel)]="newAccountBalance"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            required
+            [disabled]="isCreatingAccount"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="primary-button"
+          [disabled]="
+            isCreatingAccount ||
+            !createAccountForm.valid ||
+            newAccountBalance === null ||
+            newAccountBalance < 0
+          "
+        >
+          {{ isCreatingAccount ? 'Creating Account...' : 'Create Account' }}
+        </button>
+      </form>
+    </section>
+
+    <!-- Money transfers -->
+    <section id="money-transfers" class="content-section">
+      <div class="section-heading">
+        <h2>Money Transfers</h2>
+        <p>Deposit or withdraw money from the selected account.</p>
+      </div>
+
+      <div class="transfer-account" *ngIf="selectedAccount">
+        <span>
+          Selected account:
+          <strong>{{ selectedAccount.accountNumber }}</strong>
+        </span>
+        <span>
+          Available balance:
+          <strong>
+            {{ selectedAccount.balance | currency:'USD':'symbol':'1.2-2' }}
+          </strong>
+        </span>
+      </div>
+
+      <div class="transfer-grid">
+
+        <!-- Deposit -->
+        <form class="transfer-form" (ngSubmit)="deposit()">
+          <div class="transfer-heading">
+            <div class="transfer-icon deposit-icon">↓</div>
+            <div>
+              <h3>Deposit Money</h3>
+              <p>Add money to your account.</p>
+            </div>
+          </div>
+
+          <label for="deposit-amount">Deposit amount</label>
+          <div class="amount-input">
+            <span>$</span>
+            <input
+              id="deposit-amount"
+              type="number"
+              name="depositAmount"
+              [(ngModel)]="depositAmount"
+              min="0.01"
+              step="0.01"
+              placeholder="Enter amount"
+              required
+              [disabled]="isProcessing || !selectedAccount"
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="primary-button"
+            [disabled]="
+              isProcessing ||
+              !selectedAccount ||
+              depositAmount === null ||
+              depositAmount <= 0
+            "
+          >
+            {{ isProcessing ? 'Processing...' : 'Deposit Money' }}
+          </button>
+        </form>
+
+        <!-- Withdrawal -->
+        <form class="transfer-form" (ngSubmit)="withdraw()">
+          <div class="transfer-heading">
+            <div class="transfer-icon withdraw-icon">↑</div>
+            <div>
+              <h3>Withdraw Money</h3>
+              <p>Withdraw money from your account.</p>
+            </div>
+          </div>
+
+          <label for="withdrawal-amount">Withdrawal amount</label>
+          <div class="amount-input">
+            <span>$</span>
+            <input
+              id="withdrawal-amount"
+              type="number"
+              name="withdrawalAmount"
+              [(ngModel)]="withdrawalAmount"
+              min="0.01"
+              step="0.01"
+              placeholder="Enter amount"
+              required
+              [disabled]="isProcessing || !selectedAccount"
+            />
+          </div>
+
+          <button
+            type="submit"
+            class="primary-button withdraw-button"
+            [disabled]="
+              isProcessing ||
+              !selectedAccount ||
+              withdrawalAmount === null ||
+              withdrawalAmount <= 0
+            "
+          >
+            {{ isProcessing ? 'Processing...' : 'Withdraw Money' }}
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Recent transactions -->
+    <section id="transactions" class="content-section">
+      <div class="section-heading">
+        <h2>Recent Transactions</h2>
+        <p>
+          Transaction history
+          <span *ngIf="selectedAccount">
+            for {{ selectedAccount.accountNumber }}
+          </span>
+        </p>
+      </div>
+
+      <div class="transactions-panel">
+        <div class="transaction-header">
+          <span>Transaction</span>
+          <span>Type</span>
+          <span>Date</span>
+          <span>Amount</span>
+        </div>
+
+        <div
+          class="transaction-row"
+          *ngFor="let transaction of transactions"
+        >
+          <div class="transaction-description">
+            <strong>
+              {{
+                transaction.type === 'DEPOSIT'
+                  ? 'Money Deposit'
+                  : transaction.type === 'WITHDRAWAL'
+                    ? 'Money Withdrawal'
+                    : transaction.type
+              }}
+            </strong>
+            <small>Transaction #{{ transaction.id }}</small>
+          </div>
+
+          <div>
+            <span
+              class="transaction-badge"
+              [ngClass]="{
+                'deposit-badge': transaction.type === 'DEPOSIT',
+                'withdraw-badge': transaction.type === 'WITHDRAWAL'
+              }"
+            >
+              {{ transaction.type }}
+            </span>
+          </div>
+
+          <div class="transaction-date">
+            {{ transaction.transactionDate | date:'medium' }}
+          </div>
+
+          <div
+            class="transaction-amount"
+            [class.positive-amount]="transaction.type === 'DEPOSIT'"
+            [class.negative-amount]="transaction.type === 'WITHDRAWAL'"
+          >
+            {{ transaction.type === 'WITHDRAWAL' ? '-' : '+' }}
+            {{ transaction.amount | currency:'USD':'symbol':'1.2-2' }}
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="transactions.length === 0">
+          <h3>No transactions yet</h3>
+          <p>Deposits and withdrawals will appear here.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="page-footer">
+      <p>BankFlow · Bank Management System</p>
+    </footer>
+
+  </main>
+</div>
