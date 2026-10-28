@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -141,5 +142,53 @@ class BankServiceTest {
 
         verify(accountRepository, never()).save(any(Account.class));
         verify(transactionRepository, never()).save(any(BankTransaction.class));
+    }
+
+    @Test
+    void depositShouldRecordCorrectTransactionDetails() {
+        when(accountRepository.findById(1L))
+            .thenReturn(Optional.of(account));
+
+        when(accountRepository.save(any(Account.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BigDecimal amount = new BigDecimal("200.00");
+
+        bankService.deposit(1L, amount);
+
+        ArgumentCaptor<BankTransaction> captor =
+            ArgumentCaptor.forClass(BankTransaction.class);
+
+        verify(transactionRepository).save(captor.capture());
+
+        BankTransaction transaction = captor.getValue();
+
+        assertEquals(account, transaction.getAccount());
+        assertEquals(amount, transaction.getAmount());
+        assertEquals("DEPOSIT", transaction.getType());
+    }
+
+    @Test
+    void withdrawShouldRecordCorrectTransactionDetails() {
+        when(accountRepository.findById(1L))
+            .thenReturn(Optional.of(account));
+
+        when(accountRepository.save(any(Account.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        BigDecimal amount = new BigDecimal("300.00");
+
+        bankService.withdraw(1L, amount);
+
+        ArgumentCaptor<BankTransaction> captor =
+            ArgumentCaptor.forClass(BankTransaction.class);
+
+        verify(transactionRepository).save(captor.capture());
+
+        BankTransaction transaction = captor.getValue();
+
+        assertEquals(account, transaction.getAccount());
+        assertEquals(amount, transaction.getAmount());
+        assertEquals("WITHDRAWAL", transaction.getType());
     }
 }
