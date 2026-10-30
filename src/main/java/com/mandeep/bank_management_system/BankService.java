@@ -23,11 +23,12 @@ public class BankService {
     }
 
     @Transactional
-    public Account deposit(Long accountId, BigDecimal amount) {
+    public Account deposit(
+            Long accountId, BigDecimal amount, Long userId) {
 
         validateAmount(amount);
 
-        Account account = findAccount(accountId);
+        Account account = findAccount(accountId, userId);
 
         account.setBalance(account.getBalance().add(amount));
 
@@ -42,11 +43,12 @@ public class BankService {
     }
 
     @Transactional
-    public Account withdraw(Long accountId, BigDecimal amount) {
+    public Account withdraw(
+            Long accountId, BigDecimal amount, Long userId) {
 
         validateAmount(amount);
 
-        Account account = findAccount(accountId);
+        Account account = findAccount(accountId, userId);
 
         if (account.getBalance().compareTo(amount) < 0) {
             throw new ResponseStatusException(
@@ -66,14 +68,18 @@ public class BankService {
         return savedAccount;
     }
 
-    private Account findAccount(Long accountId) {
-        return accountRepository.findById(accountId)
+    @Transactional(readOnly = true)
+    public Account findAccount(Long accountId, Long userId) {
+
+        return accountRepository
+                .findByIdAndOwnerId(accountId, userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Account not found with ID: " + accountId));
+                        "Account not found."));
     }
 
     private void validateAmount(BigDecimal amount) {
+
         if (amount == null
                 || amount.compareTo(BigDecimal.ZERO) <= 0) {
 

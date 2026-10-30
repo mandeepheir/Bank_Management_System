@@ -33,6 +33,8 @@ class BankServiceTest {
 
     private Account account;
 
+    private final Long userId = 1L;
+
     @BeforeEach
     void setUp() {
         account = new Account(
@@ -45,14 +47,14 @@ class BankServiceTest {
 
     @Test
     void depositShouldIncreaseBalanceAndRecordTransaction() {
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdAndOwnerId(1L, userId))
             .thenReturn(Optional.of(account));
 
         when(accountRepository.save(any(Account.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         Account result = bankService.deposit(
-            1L, new BigDecimal("200.00")
+            1L, new BigDecimal("200.00"), userId
         );
 
         assertEquals(new BigDecimal("1200.00"), result.getBalance());
@@ -63,14 +65,14 @@ class BankServiceTest {
 
     @Test
     void withdrawShouldDecreaseBalanceAndRecordTransaction() {
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdAndOwnerId(1L, userId))
             .thenReturn(Optional.of(account));
 
         when(accountRepository.save(any(Account.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         Account result = bankService.withdraw(
-            1L, new BigDecimal("300.00")
+            1L, new BigDecimal("300.00"), userId
         );
 
         assertEquals(new BigDecimal("700.00"), result.getBalance());
@@ -81,12 +83,14 @@ class BankServiceTest {
 
     @Test
     void withdrawShouldRejectInsufficientFunds() {
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdAndOwnerId(1L, userId))
             .thenReturn(Optional.of(account));
 
         ResponseStatusException exception = assertThrows(
             ResponseStatusException.class,
-            () -> bankService.withdraw(1L, new BigDecimal("1500.00"))
+            () -> bankService.withdraw(
+                1L, new BigDecimal("1500.00"), userId
+            )
         );
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
@@ -99,7 +103,7 @@ class BankServiceTest {
     void depositShouldRejectZeroAmount() {
         assertThrows(
             ResponseStatusException.class,
-            () -> bankService.deposit(1L, BigDecimal.ZERO)
+            () -> bankService.deposit(1L, BigDecimal.ZERO, userId)
         );
 
         verify(accountRepository, never()).save(any(Account.class));
@@ -110,7 +114,9 @@ class BankServiceTest {
     void withdrawShouldRejectNegativeAmount() {
         assertThrows(
             ResponseStatusException.class,
-            () -> bankService.withdraw(1L, new BigDecimal("-10.00"))
+            () -> bankService.withdraw(
+                1L, new BigDecimal("-10.00"), userId
+            )
         );
 
         verify(accountRepository, never()).save(any(Account.class));
@@ -121,7 +127,7 @@ class BankServiceTest {
     void depositShouldRejectNullAmount() {
         assertThrows(
             ResponseStatusException.class,
-            () -> bankService.deposit(1L, null)
+            () -> bankService.deposit(1L, null, userId)
         );
 
         verify(accountRepository, never()).save(any(Account.class));
@@ -130,12 +136,14 @@ class BankServiceTest {
 
     @Test
     void operationShouldRejectMissingAccount() {
-        when(accountRepository.findById(99L))
+        when(accountRepository.findByIdAndOwnerId(99L, userId))
             .thenReturn(Optional.empty());
 
         ResponseStatusException exception = assertThrows(
             ResponseStatusException.class,
-            () -> bankService.deposit(99L, new BigDecimal("100.00"))
+            () -> bankService.deposit(
+                99L, new BigDecimal("100.00"), userId
+            )
         );
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
@@ -146,7 +154,7 @@ class BankServiceTest {
 
     @Test
     void depositShouldRecordCorrectTransactionDetails() {
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdAndOwnerId(1L, userId))
             .thenReturn(Optional.of(account));
 
         when(accountRepository.save(any(Account.class)))
@@ -154,7 +162,7 @@ class BankServiceTest {
 
         BigDecimal amount = new BigDecimal("200.00");
 
-        bankService.deposit(1L, amount);
+        bankService.deposit(1L, amount, userId);
 
         ArgumentCaptor<BankTransaction> captor =
             ArgumentCaptor.forClass(BankTransaction.class);
@@ -170,7 +178,7 @@ class BankServiceTest {
 
     @Test
     void withdrawShouldRecordCorrectTransactionDetails() {
-        when(accountRepository.findById(1L))
+        when(accountRepository.findByIdAndOwnerId(1L, userId))
             .thenReturn(Optional.of(account));
 
         when(accountRepository.save(any(Account.class)))
@@ -178,7 +186,7 @@ class BankServiceTest {
 
         BigDecimal amount = new BigDecimal("300.00");
 
-        bankService.withdraw(1L, amount);
+        bankService.withdraw(1L, amount, userId);
 
         ArgumentCaptor<BankTransaction> captor =
             ArgumentCaptor.forClass(BankTransaction.class);

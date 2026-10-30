@@ -2,6 +2,7 @@
 package com.mandeep.bank_management_system;
 
 import java.math.BigDecimal;
+import java.security.Principal;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
@@ -24,15 +25,26 @@ public class BankController {
     private final AccountRepository accountRepository;
     private final BankService bankService;
     private final BankTransactionRepository transactionRepository;
+    private final AppUserRepository appUserRepository;
 
     public BankController(
             AccountRepository accountRepository,
             BankService bankService,
-            BankTransactionRepository transactionRepository) {
+            BankTransactionRepository transactionRepository,
+            AppUserRepository appUserRepository) {
 
         this.accountRepository = accountRepository;
         this.bankService = bankService;
         this.transactionRepository = transactionRepository;
+        this.appUserRepository = appUserRepository;
+    }
+
+    private AppUser getCurrentUser(Principal principal) {
+
+        return appUserRepository.findByUsername(principal.getName())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Authenticated user not found."));
     }
 
     @GetMapping("/hello")
@@ -45,25 +57,33 @@ public class BankController {
         return "Bank Management System API - Version 1.0";
     }
 
-    // Get all accounts
+    // Get accounts belonging to the logged-in user
     @GetMapping("/accounts")
-    public List<Account> getAllAccounts() {
-        return accountRepository.findAll();
+    public List<Account> getAllAccounts(Principal principal) {
+
+        AppUser user = getCurrentUser(principal);
+
+        return accountRepository.findByOwnerId(user.getId());
     }
 
-    // Get one account by ID
+    // Get one account belonging to the logged-in user
     @GetMapping("/accounts/{id}")
-    public Account getAccountById(@PathVariable Long id) {
-        return accountRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Account not found with ID: " + id));
+    public Account getAccountById(
+            @PathVariable Long id,
+            Principal principal) {
+
+        AppUser user = getCurrentUser(principal);
+
+        return bankService.findAccount(id, user.getId());
     }
 
-    // Create a new account
+    // Create a new account for the logged-in user
     @PostMapping("/accounts")
     public ResponseEntity<Account> createAccount(
-            @RequestBody Account account) {
+            @RequestBody Account account,
+            Principal principal) {
+
+        AppUser user = getCurrentUser(principal);
 
         if (account.getAccountHolderName() == null
                 || account.getAccountHolderName().isBlank()) {
@@ -97,8 +117,8 @@ public class BankController {
                     "This account number already exists.");
         }
 
-        // Let the database generate a new ID
         account.setId(null);
+        account.setOwner(user);
 
         Account savedAccount = accountRepository.save(account);
 
@@ -106,34 +126,41 @@ public class BankController {
                 .body(savedAccount);
     }
 
-    // Deposit money
+    // Deposit money into the user's own account
     @PostMapping("/accounts/{id}/deposit")
     public Account deposit(
             @PathVariable Long id,
-            @RequestBody AmountRequest request) {
+            @RequestBody AmountRequest request,
+            Principal principal) {
 
-        return bankService.deposit(id, request.getAmount());
+        AppUser user = getCurrentUser(principal);
+
+        return bankService.deposit(
+                id, request.getAmount(), user.getId());
     }
 
-    // Withdraw money
+    // Withdraw money from the user's own account
     @PostMapping("/accounts/{id}/withdraw")
     public Account withdraw(
             @PathVariable Long id,
-            @RequestBody AmountRequest request) {
+            @RequestBody AmountRequest request,
+            Principal principal) {
 
-        return bankService.withdraw(id, request.getAmount());
+        AppUser user = getCurrentUser(principal);
+
+        return bankService.withdraw(
+                id, request.getAmount(), user.getId());
     }
 
-    // Get transaction history for an account
+    // Get transaction history for the user's own account
     @GetMapping("/accounts/{id}/transactions")
     public List<TransactionResponse> getAccountTransactions(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Principal principal) {
 
-        if (!accountRepository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Account not found with ID: " + id);
-        }
+        AppUser user = getCurrentUser(principal);
+
+        bankService.findAccount(id, user.getId());
 
         return transactionRepository
                 .findByAccountIdOrderByTransactionDateDesc(id)
@@ -147,23 +174,21 @@ public class BankController {
                 .toList();
     }
 
-    // Delete an account
+    // Delete the user's own account
     @DeleteMapping("/accounts/{id}")
     public ResponseEntity<Void> deleteAccount(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Principal principal) {
 
-        if (!accountRepository.existsById(id)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Account not found with ID: " + id);
-        }
+        AppUser user = getCurrentUser(principal);
+
+        bankService.findAccount(id, user.getId());
 
         accountRepository.deleteById(id);
 
         return ResponseEntity.noContent().build();
     }
 
-    // Request body for deposits and withdrawals
     public static class AmountRequest {
 
         private BigDecimal amount;
